@@ -92,16 +92,15 @@ export function QRGenerator({ token }: QRGeneratorProps) {
 
   async function shareLink() {
     if (!qrData) return
-    // Incluir dest en el link para que la página pública pueda mostrar la dirección
-    const linkWithDest = `${qrData.payment_url}?dest=${qrData.destination}`
+    // payment_url ya incluye ?dest=, amount, memo y desc desde el API
     if (navigator.share) {
       await navigator.share({
         title: 'Pago con PosPago',
         text: `Paga $${qrData.amount_usdc} USD${qrData.description ? ` — ${qrData.description}` : ''}`,
-        url: linkWithDest,
+        url: qrData.payment_url,
       })
     } else {
-      await navigator.clipboard.writeText(linkWithDest)
+      await navigator.clipboard.writeText(qrData.payment_url)
       toast('Link copiado', 'success')
     }
   }
@@ -143,6 +142,13 @@ export function QRGenerator({ token }: QRGeneratorProps) {
         <p className="text-center text-xs text-slate-500">
           El cliente escanea con la cámara del celular
         </p>
+
+        {qrData.payment_url.startsWith('http://localhost') && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 text-yellow-300 text-xs">
+            ⚠ El QR solo funciona en la misma red WiFi. Para compartir el link por WhatsApp, configura{' '}
+            <code className="font-mono">NEXT_PUBLIC_APP_URL</code> con una URL pública (ngrok o deploy en Vercel).
+          </div>
+        )}
 
         {/* Datos copiables para quien no pueda escanear */}
         <div className="bg-[#12122E] rounded-xl px-4 py-1">

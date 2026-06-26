@@ -62,7 +62,7 @@ export default function PagarPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const dest = params.get('dest')
-    if (dest && dest.startsWith('G') && dest.length === 56) {
+    if (dest && dest.startsWith('G')) {
       setDestination(dest)
     }
   }, [])

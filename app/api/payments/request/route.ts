@@ -43,8 +43,8 @@ export const POST = withAuth(async (req: NextRequest, user: JWTPayload) => {
 
     const destination = user.stellarPublicKey
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pospago.app'
-    // Incluir dest en la URL para que la página pública muestre la dirección al cliente
-    const paymentUrl = `${baseUrl}/pagar/${paymentRequest.id}?dest=${destination}`
+    // Incluir dest, amount, memo y desc para que la página pública muestre todos los datos
+    const paymentUrl = `${baseUrl}/pagar/${paymentRequest.id}?dest=${destination}&amount=${paymentRequest.amount_usdc}&memo=${memo}&desc=${encodeURIComponent(description ?? '')}`
     const assetCode = getUSDCAssetCode()
     const assetIssuer = getUSDCIssuer()
     console.log('[QR] destination:', destination, 'amount:', amount_usdc, 'assetCode:', assetCode, 'assetIssuer:', assetIssuer)
