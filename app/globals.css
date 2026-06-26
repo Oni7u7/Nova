@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #6366F1;
+  --color-success: #10B981;
+  --color-bg: #0F0F23;
+  --color-surface: #1A1A3E;
+  --color-text: #F1F5F9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #0F0F23;
+  color: #F1F5F9;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar discreta */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #0F0F23;
+}
+::-webkit-scrollbar-thumb {
+  background: #6366F1;
+  border-radius: 2px;
+}
