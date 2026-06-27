@@ -16,6 +16,7 @@ interface Transaction {
 interface TransactionListProps {
   token: string
   refreshTrigger?: number
+  limit?: number
 }
 
 const STATUS_BADGE = {
@@ -27,12 +28,12 @@ const STATUS_BADGE = {
 const TYPE_ICON = {
   payment_received: (
     <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
     </svg>
   ),
   withdrawal: (
     <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
     </svg>
   ),
   deposit: (
@@ -48,18 +49,22 @@ const TYPE_LABEL = {
   deposit: 'Depósito',
 }
 
-export function TransactionList({ token, refreshTrigger }: TransactionListProps) {
+export function TransactionList({ token, refreshTrigger, limit = 5 }: TransactionListProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchTransactions() {
       try {
-        const res = await fetch('/api/transactions?limit=20', {
+        const res = await fetch(`/api/transactions?limit=${limit}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
-        if (!res.ok) return
+        if (!res.ok) {
+          console.error('[TransactionList] API error:', res.status, await res.text())
+          return
+        }
         const data = await res.json()
+        console.log('[TransactionList] transactions received:', data.transactions?.length ?? 0)
         setTransactions(data.transactions ?? [])
       } finally {
         setLoading(false)
@@ -67,7 +72,7 @@ export function TransactionList({ token, refreshTrigger }: TransactionListProps)
     }
 
     fetchTransactions()
-  }, [token, refreshTrigger])
+  }, [token, refreshTrigger, limit])
 
   if (loading) {
     return (
@@ -97,7 +102,9 @@ export function TransactionList({ token, refreshTrigger }: TransactionListProps)
               {TYPE_ICON[tx.type]}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-200">{TYPE_LABEL[tx.type]}</p>
+              <p className="text-sm font-medium text-slate-200">
+                {tx.memo ? `Ref: ${tx.memo}` : TYPE_LABEL[tx.type]}
+              </p>
               <p className="text-xs text-slate-500">{formatRelativeTime(tx.created_at)}</p>
             </div>
             <div className="text-right shrink-0">

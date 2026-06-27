@@ -21,7 +21,7 @@ export default function HistorialPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-white">Historial</h1>
       <Card>
-        <TransactionList token={token} />
+        <TransactionList token={token} limit={50} />
       </Card>
     </div>
   )

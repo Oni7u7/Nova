@@ -47,12 +47,17 @@ export const GET = withAuth(async (_req: NextRequest, user: JWTPayload) => {
       getExchangeRates(),
     ])
 
+    console.log('[balance] USDC_ISSUER env:', process.env.USDC_ISSUER)
+    console.log('[balance] all balances:', JSON.stringify(account.balances))
+
     const usdcBalance = account.balances.find(
       (b) =>
         b.asset_type === 'credit_alphanum4' &&
         (b as { asset_code: string; asset_issuer: string }).asset_code === USDC.getCode() &&
         (b as { asset_code: string; asset_issuer: string }).asset_issuer === USDC.getIssuer()
     )
+
+    console.log('[balance] USDC found:', JSON.stringify(usdcBalance ?? null))
 
     const hasTrustline = !!usdcBalance
     const usdc = parseFloat(usdcBalance?.balance ?? '0')
