@@ -34,17 +34,11 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
   const knownHashes = new Set((existingTxs ?? []).map((t) => t.stellar_tx_hash))
 
   // Traer últimos pagos de Horizon
-  const page = await server.payments().forAccount(publicKey).limit(20).order('desc').call()
+  const page = await server.payments().forAccount(publicKey).limit(50).order('desc').call()
 
-  console.log('[sync] payments from Horizon:', page.records.length)
-  ;(page.records as HorizonPayment[]).forEach((p) => {
-    console.log('[sync] payment:', {
-      type: p.type,
-      asset_code: p.asset_code,
-      asset_issuer: p.asset_issuer,
-      to: p.to,
-      amount: p.amount,
-    })
+  console.log('[sync] total payments from Horizon:', page.records.length)
+  ;(page.records as HorizonPayment[]).forEach((r: any) => {
+    console.log('[sync] record:', r.type, r.asset_code, r.to?.slice(0, 8), r.transaction_hash?.slice(0, 8))
   })
 
   // Filtrar solo por asset_code === 'USDC' y destinatario === publicKey.
@@ -52,13 +46,22 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
   const newPayments = (page.records as HorizonPayment[]).filter(
     (r) =>
       r.type === 'payment' &&
-      r.to === publicKey &&
+      r.to?.trim() === publicKey.trim() &&
       r.asset_code === usdcCode &&
       !knownHashes.has(r.transaction_hash)
   )
 
   for (const payment of newPayments) {
     try {
+      // Double-check en DB para evitar duplicados por requests concurrentes
+      const { data: existing } = await supabaseAdmin
+        .from('transactions')
+        .select('id')
+        .eq('stellar_tx_hash', payment.transaction_hash)
+        .maybeSingle()
+
+      if (existing) continue
+
       const tx = await payment.transaction()
       const memo = tx.memo ?? null
 
