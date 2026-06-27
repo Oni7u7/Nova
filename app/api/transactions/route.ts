@@ -24,50 +24,46 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
   console.log('[sync] publicKey:', publicKey)
   console.log('[sync] USDC_ISSUER env:', getUSDCIssuer())
 
+  // Hashes ya registrados en DB para evitar duplicados
+  const { data: existingTxs } = await supabaseAdmin
+    .from('transactions')
+    .select('stellar_tx_hash')
+    .eq('user_id', userId)
+    .not('stellar_tx_hash', 'is', null)
+
+  const knownHashes = new Set((existingTxs ?? []).map((t) => t.stellar_tx_hash))
+
   // Traer últimos pagos de Horizon
-  const page = await server.payments().forAccount(publicKey).limit(200).order('desc').call()
+  const page = await server.payments().forAccount(publicKey).limit(50).order('desc').call()
 
   console.log('[sync] total payments from Horizon:', page.records.length)
   ;(page.records as HorizonPayment[]).forEach((r: any) => {
     console.log('[sync] record:', r.type, r.asset_code, r.to?.slice(0, 8), r.transaction_hash?.slice(0, 8))
   })
 
-  // Filtrar solo pagos USDC recibidos en esta cuenta
-  const pk = publicKey.trim()
-  const usdcPayments = (page.records as any[]).filter(
+  // Filtrar solo por asset_code === 'USDC' y destinatario === publicKey.
+  // No filtramos por asset_issuer para no perder pagos hechos con el issuer anterior.
+  const newPayments = (page.records as HorizonPayment[]).filter(
     (r) =>
       r.type === 'payment' &&
-      (r.to?.trim() === pk || r.into?.trim() === pk) &&
-      r.asset_code === usdcCode
+      r.to?.trim() === publicKey.trim() &&
+      r.asset_code === usdcCode &&
+      !knownHashes.has(r.transaction_hash)
   )
 
-  for (const payment of usdcPayments) {
+  for (const payment of newPayments) {
     try {
+      // Double-check en DB para evitar duplicados por requests concurrentes
+      const { data: existing } = await supabaseAdmin
+        .from('transactions')
+        .select('id')
+        .eq('stellar_tx_hash', payment.transaction_hash)
+        .maybeSingle()
+
+      if (existing) continue
+
       const tx = await payment.transaction()
-      // memo viene como string en memo_type 'text'; null en otros tipos
-      const memo: string | null = (tx as any).memo_type === 'text'
-        ? ((tx as any).memo ?? null)
-        : null
-
-      console.log('[sync] procesando memo:', memo, 'hash:', payment.transaction_hash?.slice(0, 8))
-
-      // Dedup: buscar por memo (más confiable) si existe, sino por hash
-      if (memo) {
-        const { data: existingByMemo } = await supabaseAdmin
-          .from('transactions')
-          .select('id')
-          .eq('memo', memo)
-          .eq('type', 'payment_received')
-          .maybeSingle()
-        if (existingByMemo) continue
-      } else {
-        const { data: existingByHash } = await supabaseAdmin
-          .from('transactions')
-          .select('id')
-          .eq('stellar_tx_hash', payment.transaction_hash)
-          .maybeSingle()
-        if (existingByHash) continue
-      }
+      const memo = tx.memo ?? null
 
       const { data: newTx } = await supabaseAdmin
         .from('transactions')
@@ -101,7 +97,7 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
         }
       }
 
-      console.log('[sync] nuevo pago insertado:', payment.transaction_hash?.slice(0, 8), 'memo:', memo)
+      console.log('[transactions] synced from Horizon:', payment.transaction_hash, 'memo:', memo)
     } catch (err) {
       console.error('[transactions] error syncing payment:', payment.transaction_hash, err)
     }

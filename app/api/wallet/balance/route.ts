@@ -50,20 +50,17 @@ export const GET = withAuth(async (_req: NextRequest, user: JWTPayload) => {
     console.log('[balance] USDC_ISSUER env:', process.env.USDC_ISSUER)
     console.log('[balance] all balances:', JSON.stringify(account.balances))
 
-    // Sumar USDC de todos los issuers (puede haber saldo del issuer viejo y nuevo)
-    const usdcBalances = account.balances.filter(
+    const usdcBalance = account.balances.find(
       (b) =>
         b.asset_type === 'credit_alphanum4' &&
-        (b as { asset_code: string }).asset_code === USDC.getCode()
+        (b as { asset_code: string; asset_issuer: string }).asset_code === USDC.getCode() &&
+        (b as { asset_code: string; asset_issuer: string }).asset_issuer === USDC.getIssuer()
     )
 
-    console.log('[balance] USDC balances found:', JSON.stringify(usdcBalances))
+    console.log('[balance] USDC found:', JSON.stringify(usdcBalance ?? null))
 
-    const hasTrustline = usdcBalances.length > 0
-    const usdc = usdcBalances.reduce(
-      (sum, b) => sum + parseFloat(b.balance ?? '0'),
-      0
-    )
+    const hasTrustline = !!usdcBalance
+    const usdc = parseFloat(usdcBalance?.balance ?? '0')
 
     return NextResponse.json({
       usdc: usdc.toFixed(2),
