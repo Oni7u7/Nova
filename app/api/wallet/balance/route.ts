@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth, JWTPayload } from '@/lib/auth/middleware'
 import { server } from '@/lib/stellar/client'
 import { USDC } from '@/lib/stellar/usdc'
+import { supabaseAdmin } from '@/lib/supabase/client'
 
 type ExchangeRates = {
   ars: number
@@ -32,8 +33,17 @@ async function getExchangeRates(): Promise<ExchangeRates> {
 
 export const GET = withAuth(async (_req: NextRequest, user: JWTPayload) => {
   try {
+    // Leer public_key de DB — evita usar clave corrupta del JWT
+    const { data: stellarAccount } = await supabaseAdmin
+      .from('stellar_accounts')
+      .select('public_key')
+      .eq('user_id', user.userId)
+      .single()
+
+    const publicKey = stellarAccount?.public_key.trim() ?? user.stellarPublicKey.trim()
+
     const [account, rates] = await Promise.all([
-      server.accounts().accountId(user.stellarPublicKey).call(),
+      server.accounts().accountId(publicKey).call(),
       getExchangeRates(),
     ])
 

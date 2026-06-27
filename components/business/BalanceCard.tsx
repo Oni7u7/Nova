@@ -29,6 +29,7 @@ export function BalanceCard({ token, localCurrency = 'ars' }: BalanceCardProps) 
   const [loading, setLoading] = useState(true)
   const [activating, setActivating] = useState(false)
   const [activateError, setActivateError] = useState('')
+  const [activated, setActivated] = useState(false)
 
   async function fetchBalance() {
     try {
@@ -49,13 +50,17 @@ export function BalanceCard({ token, localCurrency = 'ars' }: BalanceCardProps) 
     try {
       const res = await fetch('/api/wallet/setup-trustline', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       })
       if (!res.ok) {
         const data = await res.json()
         setActivateError(data.error ?? 'Error al activar')
         return
       }
+      setActivated(true)
       await fetchBalance()
     } catch {
       setActivateError('Error de conexión')
@@ -80,8 +85,12 @@ export function BalanceCard({ token, localCurrency = 'ars' }: BalanceCardProps) 
     <div className="space-y-3">
       {balance && !balance.hasTrustline && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-          <p className="text-yellow-300 text-xs">
-            Tu cuenta no puede recibir USDC todavía.
+          <p className="text-xs">
+            {activated ? (
+              <span className="text-emerald-400">¡Cuenta activada! Ya puedes recibir USDC.</span>
+            ) : (
+              <span className="text-yellow-300">Tu cuenta no puede recibir USDC todavía.</span>
+            )}
             {activateError && (
               <span className="block text-red-400 mt-0.5">{activateError}</span>
             )}
