@@ -61,9 +61,13 @@ export default function PagarPage() {
   // Leer destination desde query param ?dest=G...
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const dest = params.get('dest')
-    if (dest && dest.startsWith('G')) {
+    const dest = params.get('dest')?.trim() ?? ''
+    if (dest.startsWith('G') && dest.length === 56) {
       setDestination(dest)
+    } else if (dest) {
+      // dest existe pero no es válida — loguear para diagnóstico
+      console.error('[pagar] dest inválida, length:', dest.length, 'value:', dest)
+      setDestination(null) // fuerza mensaje de error en UI
     }
   }, [])
 
@@ -193,8 +197,8 @@ export default function PagarPage() {
                 {destination && <CopyButton value={destination} label="Copiar" />}
               </div>
               {!destination && (
-                <p className="text-xs text-yellow-400">
-                  Pide al comerciante que te comparta el link completo con la dirección incluida
+                <p className="text-xs text-red-400">
+                  Error: dirección de destino inválida. Pide al comerciante que genere un nuevo cobro.
                 </p>
               )}
             </div>

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { withAuth, JWTPayload } from '@/lib/auth/middleware'
+import { withAuth, JWTPayload, getKeypairForUser } from '@/lib/auth/middleware'
 import { supabaseAdmin } from '@/lib/supabase/client'
 import { generateQRBase64, buildSEP7PaymentURI } from '@/lib/utils/qr'
 import { getUSDCAssetCode, getUSDCIssuer } from '@/lib/stellar/usdc'
@@ -41,7 +41,20 @@ export const POST = withAuth(async (req: NextRequest, user: JWTPayload) => {
       .update({ memo })
       .eq('id', paymentRequest.id)
 
-    const destination = user.stellarPublicKey
+    // Validar public key — si el JWT trae datos corruptos, leer de DB directamente
+    let destination = user.stellarPublicKey.trim()
+    console.log('[QR dest check] publicKey length:', destination.length, 'value:', destination)
+    if (!destination.startsWith('G') || destination.length !== 56) {
+      console.error('[QR] public key inválida en JWT, releyendo de DB...')
+      try {
+        const keypair = await getKeypairForUser(user.userId)
+        destination = keypair.publicKey()
+        console.log('[QR] public key recuperada de DB:', destination)
+      } catch {
+        return NextResponse.json({ error: 'Dirección Stellar inválida, re-inicia sesión' }, { status: 500 })
+      }
+    }
+
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pospago.app'
     // Incluir dest, amount, memo y desc para que la página pública muestre todos los datos
     const paymentUrl = `${baseUrl}/pagar/${paymentRequest.id}?dest=${destination}&amount=${paymentRequest.amount_usdc}&memo=${memo}&desc=${encodeURIComponent(description ?? '')}`

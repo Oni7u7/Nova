@@ -42,11 +42,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cuenta incompleta, contacta soporte' }, { status: 500 })
     }
 
+    const publicKey = stellarAccount.public_key.trim()
+    if (!publicKey.startsWith('G') || publicKey.length !== 56) {
+      console.error('[login] public_key inválida en DB:', JSON.stringify(stellarAccount.public_key))
+      return NextResponse.json({ error: 'Cuenta Stellar corrupta, contacta soporte' }, { status: 500 })
+    }
+
     const token = jwt.sign(
       {
         userId: user.id,
         accountType: user.account_type,
-        stellarPublicKey: stellarAccount.public_key,
+        stellarPublicKey: publicKey,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -60,7 +66,7 @@ export async function POST(req: NextRequest) {
         full_name: user.full_name,
         account_type: user.account_type,
         business_name: user.business_name,
-        stellar_public_key: stellarAccount.public_key,
+        stellar_public_key: publicKey,
       },
     })
   } catch (err) {
