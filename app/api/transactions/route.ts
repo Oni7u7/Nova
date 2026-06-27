@@ -20,7 +20,9 @@ interface HorizonPayment {
 
 async function syncHorizonPayments(userId: string, publicKey: string): Promise<void> {
   const usdcCode = getUSDCAssetCode()
-  const usdcIssuer = getUSDCIssuer()
+
+  console.log('[sync] publicKey:', publicKey)
+  console.log('[sync] USDC_ISSUER env:', getUSDCIssuer())
 
   // Hashes ya registrados en DB para evitar duplicados
   const { data: existingTxs } = await supabaseAdmin
@@ -34,12 +36,24 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
   // Traer últimos pagos de Horizon
   const page = await server.payments().forAccount(publicKey).limit(20).order('desc').call()
 
+  console.log('[sync] payments from Horizon:', page.records.length)
+  ;(page.records as HorizonPayment[]).forEach((p) => {
+    console.log('[sync] payment:', {
+      type: p.type,
+      asset_code: p.asset_code,
+      asset_issuer: p.asset_issuer,
+      to: p.to,
+      amount: p.amount,
+    })
+  })
+
+  // Filtrar solo por asset_code === 'USDC' y destinatario === publicKey.
+  // No filtramos por asset_issuer para no perder pagos hechos con el issuer anterior.
   const newPayments = (page.records as HorizonPayment[]).filter(
     (r) =>
       r.type === 'payment' &&
       r.to === publicKey &&
       r.asset_code === usdcCode &&
-      r.asset_issuer === usdcIssuer &&
       !knownHashes.has(r.transaction_hash)
   )
 

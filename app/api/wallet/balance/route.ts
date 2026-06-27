@@ -73,6 +73,7 @@ export const GET = withAuth(async (_req: NextRequest, user: JWTPayload) => {
         ars: '0',
         brl: '0.00',
         cop: '0',
+        hasTrustline: false,
         rates: { ars: 0, brl: 0, cop: 0 },
       })
     }
