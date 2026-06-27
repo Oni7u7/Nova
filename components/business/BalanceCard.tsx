@@ -16,6 +16,7 @@ interface BalanceData {
 interface BalanceCardProps {
   token: string
   localCurrency?: 'ars' | 'brl' | 'cop'
+  refreshTrigger?: number
 }
 
 const CURRENCY_CONFIG = {
@@ -24,7 +25,7 @@ const CURRENCY_CONFIG = {
   cop: { label: 'Pesos colombianos', locale: 'es-CO', code: 'COP' },
 }
 
-export function BalanceCard({ token, localCurrency = 'ars' }: BalanceCardProps) {
+export function BalanceCard({ token, localCurrency = 'ars', refreshTrigger }: BalanceCardProps) {
   const [balance, setBalance] = useState<BalanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [activating, setActivating] = useState(false)
@@ -71,10 +72,8 @@ export function BalanceCard({ token, localCurrency = 'ars' }: BalanceCardProps) 
 
   useEffect(() => {
     fetchBalance()
-    const interval = setInterval(fetchBalance, 30_000)
-    return () => clearInterval(interval)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [token, refreshTrigger])
 
   if (loading) return <BalanceSkeleton />
 

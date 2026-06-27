@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { BalanceCard } from '@/components/business/BalanceCard'
 import { TransactionList } from '@/components/business/TransactionList'
-import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 
 interface User {
@@ -28,6 +27,15 @@ export default function BusinessDashboard() {
     setUser(JSON.parse(u))
   }, [router])
 
+  // Polling cada 5s para refrescar balance y transacciones automáticamente
+  useEffect(() => {
+    if (!token) return
+    const interval = setInterval(() => {
+      setRefreshTx(n => n + 1)
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [token])
+
   if (!token || !user) return null
 
   return (
@@ -41,7 +49,7 @@ export default function BusinessDashboard() {
       </div>
 
       {/* Saldo */}
-      <BalanceCard token={token} />
+      <BalanceCard token={token} refreshTrigger={refreshTx} />
 
       {/* Acciones rápidas */}
       <div className="grid grid-cols-2 gap-3">
