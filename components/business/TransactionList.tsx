@@ -9,6 +9,7 @@ interface Transaction {
   type: 'payment_received' | 'withdrawal' | 'deposit'
   amount_usdc: number
   memo: string | null
+  stellar_tx_hash: string | null
   status: 'pending' | 'confirmed' | 'failed'
   created_at: string
 }
@@ -106,6 +107,20 @@ export function TransactionList({ token, refreshTrigger, limit = 5 }: Transactio
                 {tx.memo ? `Ref: ${tx.memo}` : TYPE_LABEL[tx.type]}
               </p>
               <p className="text-xs text-slate-500">{formatRelativeTime(tx.created_at)}</p>
+              {tx.stellar_tx_hash && (
+                <a
+                  href={
+                    process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'mainnet'
+                      ? `https://stellar.expert/explorer/public/tx/${tx.stellar_tx_hash}`
+                      : `https://stellar.expert/explorer/testnet/tx/${tx.stellar_tx_hash}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-indigo-400 hover:text-indigo-300 underline mt-1 block"
+                >
+                  Ver en Stellar Expert →
+                </a>
+              )}
             </div>
             <div className="text-right shrink-0">
               <p className="font-mono text-sm font-semibold text-white">
