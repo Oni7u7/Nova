@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { withAuth, JWTPayload, getKeypairForUser } from '@/lib/auth/middleware'
+import { withAuth, JWTPayload } from '@/lib/auth/middleware'
 import { supabaseAdmin } from '@/lib/supabase/client'
 import { generateQRBase64, buildSEP7PaymentURI } from '@/lib/utils/qr'
 import { getUSDCAssetCode, getUSDCIssuer } from '@/lib/stellar/usdc'
@@ -41,18 +41,26 @@ export const POST = withAuth(async (req: NextRequest, user: JWTPayload) => {
       .update({ memo })
       .eq('id', paymentRequest.id)
 
-    // Validar public key — si el JWT trae datos corruptos, leer de DB directamente
-    let destination = user.stellarPublicKey.trim()
-    console.log('[QR dest check] publicKey length:', destination.length, 'value:', destination)
+    // Siempre leer public_key de la DB — fuente de verdad, evita corrupción del JWT
+    const { data: stellarAccount, error: stellarError } = await supabaseAdmin
+      .from('stellar_accounts')
+      .select('public_key')
+      .eq('user_id', user.userId)
+      .single()
+
+    if (stellarError || !stellarAccount) {
+      console.error('[payments/request] cuenta Stellar no encontrada para userId:', user.userId)
+      return NextResponse.json({ error: 'Cuenta Stellar no encontrada' }, { status: 500 })
+    }
+
+    const destination = stellarAccount.public_key.trim()
+    console.log('[payments/request] dest que va al QR:', destination)
+    console.log('[payments/request] USDC_ISSUER:', process.env.USDC_ISSUER)
+    console.log('[payments/request] stellarPublicKey del JWT:', user.stellarPublicKey)
+
     if (!destination.startsWith('G') || destination.length !== 56) {
-      console.error('[QR] public key inválida en JWT, releyendo de DB...')
-      try {
-        const keypair = await getKeypairForUser(user.userId)
-        destination = keypair.publicKey()
-        console.log('[QR] public key recuperada de DB:', destination)
-      } catch {
-        return NextResponse.json({ error: 'Dirección Stellar inválida, re-inicia sesión' }, { status: 500 })
-      }
+      console.error('[payments/request] public_key inválida en DB:', JSON.stringify(destination))
+      return NextResponse.json({ error: 'Dirección Stellar inválida en cuenta, contacta soporte' }, { status: 500 })
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pospago.app'
