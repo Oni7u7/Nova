@@ -24,15 +24,6 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
   console.log('[sync] publicKey:', publicKey)
   console.log('[sync] USDC_ISSUER env:', getUSDCIssuer())
 
-  // Hashes ya registrados en DB para evitar duplicados
-  const { data: existingTxs } = await supabaseAdmin
-    .from('transactions')
-    .select('stellar_tx_hash')
-    .eq('user_id', userId)
-    .not('stellar_tx_hash', 'is', null)
-
-  const knownHashes = new Set((existingTxs ?? []).map((t) => t.stellar_tx_hash))
-
   // Traer últimos pagos de Horizon
   const page = await server.payments().forAccount(publicKey).limit(200).order('desc').call()
 
@@ -41,20 +32,18 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
     console.log('[sync] record:', r.type, r.asset_code, r.to?.slice(0, 8), r.transaction_hash?.slice(0, 8))
   })
 
-  // Filtrar solo por asset_code === 'USDC' y destinatario === publicKey.
-  // No filtramos por asset_issuer para no perder pagos hechos con el issuer anterior.
+  // Filtrar solo pagos USDC recibidos en esta cuenta
   const pk = publicKey.trim()
-  const newPayments = (page.records as any[]).filter(
+  const usdcPayments = (page.records as any[]).filter(
     (r) =>
       r.type === 'payment' &&
       (r.to?.trim() === pk || r.into?.trim() === pk) &&
-      r.asset_code === usdcCode &&
-      !knownHashes.has(r.transaction_hash)
+      r.asset_code === usdcCode
   )
 
-  for (const payment of newPayments) {
+  for (const payment of usdcPayments) {
     try {
-      // Double-check en DB para evitar duplicados por requests concurrentes
+      // Verificar en DB si ya existe este tx — fuente única de verdad
       const { data: existing } = await supabaseAdmin
         .from('transactions')
         .select('id')
@@ -98,7 +87,7 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
         }
       }
 
-      console.log('[transactions] synced from Horizon:', payment.transaction_hash, 'memo:', memo)
+      console.log('[sync] nuevo pago insertado:', payment.transaction_hash?.slice(0, 8), 'memo:', memo)
     } catch (err) {
       console.error('[transactions] error syncing payment:', payment.transaction_hash, err)
     }
