@@ -3,103 +3,85 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth, JWTPayload } from '@/lib/auth/middleware'
 import { supabaseAdmin } from '@/lib/supabase/client'
-import { server } from '@/lib/stellar/client'
-import { getUSDCAssetCode, getUSDCIssuer } from '@/lib/stellar/usdc'
-
-interface HorizonPayment {
-  type: string
-  to: string
-  from: string
-  asset_code?: string
-  asset_issuer?: string
-  amount: string
-  transaction_hash: string
-  created_at: string
-  transaction: () => Promise<{ memo: string | null }>
-}
 
 async function syncHorizonPayments(userId: string, publicKey: string): Promise<void> {
-  const usdcCode = getUSDCAssetCode()
+  const { Horizon } = await import('@stellar/stellar-sdk')
+  const horizonServer = new Horizon.Server(
+    process.env.STELLAR_NETWORK === 'mainnet'
+      ? 'https://horizon.stellar.org'
+      : 'https://horizon-testnet.stellar.org'
+  )
 
-  console.log('[sync] publicKey:', publicKey)
-  console.log('[sync] USDC_ISSUER env:', getUSDCIssuer())
-
-  // Hashes ya registrados en DB para evitar duplicados
-  const { data: existingTxs } = await supabaseAdmin
+  // Una sola query al inicio — todos los hashes conocidos para este usuario
+  const { data: existing } = await supabaseAdmin
     .from('transactions')
     .select('stellar_tx_hash')
     .eq('user_id', userId)
-    .not('stellar_tx_hash', 'is', null)
+    .eq('type', 'payment_received')
 
-  const knownHashes = new Set((existingTxs ?? []).map((t) => t.stellar_tx_hash))
-
-  // Traer últimos pagos de Horizon
-  const page = await server.payments().forAccount(publicKey).limit(50).order('desc').call()
-
-  console.log('[sync] total payments from Horizon:', page.records.length)
-  ;(page.records as HorizonPayment[]).forEach((r: any) => {
-    console.log('[sync] record:', r.type, r.asset_code, r.to?.slice(0, 8), r.transaction_hash?.slice(0, 8))
-  })
-
-  // Filtrar solo por asset_code === 'USDC' y destinatario === publicKey.
-  // No filtramos por asset_issuer para no perder pagos hechos con el issuer anterior.
-  const newPayments = (page.records as HorizonPayment[]).filter(
-    (r) =>
-      r.type === 'payment' &&
-      r.to?.trim() === publicKey.trim() &&
-      r.asset_code === usdcCode &&
-      !knownHashes.has(r.transaction_hash)
+  const knownHashes = new Set(
+    (existing ?? []).map((r: any) => r.stellar_tx_hash).filter(Boolean)
   )
 
-  for (const payment of newPayments) {
+  const payments = await horizonServer.payments()
+    .forAccount(publicKey)
+    .limit(200)
+    .order('desc')
+    .call()
+
+  console.log('[sync] publicKey:', publicKey, '| records:', payments.records.length)
+
+  for (const record of payments.records as any[]) {
+    if (record.type !== 'payment') continue
+    if (record.asset_code !== 'USDC') continue
+    if (record.to?.trim() !== publicKey.trim()) continue
+
+    const txHash: string = record.transaction_hash
+    if (knownHashes.has(txHash)) continue
+
+    let memo = ''
     try {
-      // Double-check en DB para evitar duplicados por requests concurrentes
-      const { data: existing } = await supabaseAdmin
-        .from('transactions')
-        .select('id')
-        .eq('stellar_tx_hash', payment.transaction_hash)
-        .maybeSingle()
+      const tx = await horizonServer.transactions().transaction(txHash).call()
+      memo = tx.memo_type === 'text' ? (tx.memo ?? '') : ''
+    } catch {
+      memo = ''
+    }
 
-      if (existing) continue
+    console.log('[sync] procesando:', txHash.slice(0, 8), '| memo:', memo || '(sin memo)')
 
-      const tx = await payment.transaction()
-      const memo = tx.memo ?? null
+    const { data: inserted, error } = await supabaseAdmin
+      .from('transactions')
+      .insert({
+        user_id: userId,
+        stellar_tx_hash: txHash,
+        type: 'payment_received',
+        amount_usdc: parseFloat(record.amount),
+        memo: memo || null,
+        status: 'confirmed',
+        created_at: record.created_at,
+      })
+      .select('id')
+      .single()
 
-      const { data: newTx } = await supabaseAdmin
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          stellar_tx_hash: payment.transaction_hash,
-          type: 'payment_received',
-          amount_usdc: parseFloat(payment.amount),
-          memo,
-          status: 'confirmed',
-          created_at: payment.created_at,
-        })
-        .select('id')
-        .single()
-
-      // Marcar payment_request como pagado si el memo coincide
-      if (memo && newTx) {
-        const { data: pr } = await supabaseAdmin
-          .from('payment_requests')
-          .select('id')
-          .eq('memo', memo)
-          .eq('user_id', userId)
-          .eq('status', 'pending')
-          .single()
-
-        if (pr) {
-          await supabaseAdmin
-            .from('payment_requests')
-            .update({ status: 'paid', paid_tx_id: newTx.id })
-            .eq('id', pr.id)
-        }
+    if (error) {
+      if (error.code === '23505') {
+        knownHashes.add(txHash) // ya existe — no reintentar
+      } else {
+        console.error('[sync] error insertando:', error.code, error.message)
       }
+      continue
+    }
 
-      console.log('[transactions] synced from Horizon:', payment.transaction_hash, 'memo:', memo)
-    } catch (err) {
-      console.error('[transactions] error syncing payment:', payment.transaction_hash, err)
+    knownHashes.add(txHash)
+    console.log('[sync] insertado:', txHash.slice(0, 8), '| memo:', memo || '(sin memo)')
+
+    if (memo && inserted) {
+      await supabaseAdmin
+        .from('payment_requests')
+        .update({ status: 'paid', paid_tx_id: inserted.id })
+        .ilike('memo', memo)
+        .eq('user_id', userId)
+        .eq('status', 'pending')
     }
   }
 }
