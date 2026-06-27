@@ -34,7 +34,7 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
   const knownHashes = new Set((existingTxs ?? []).map((t) => t.stellar_tx_hash))
 
   // Traer últimos pagos de Horizon
-  const page = await server.payments().forAccount(publicKey).limit(50).order('desc').call()
+  const page = await server.payments().forAccount(publicKey).limit(200).order('desc').call()
 
   console.log('[sync] total payments from Horizon:', page.records.length)
   ;(page.records as HorizonPayment[]).forEach((r: any) => {
@@ -43,10 +43,11 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
 
   // Filtrar solo por asset_code === 'USDC' y destinatario === publicKey.
   // No filtramos por asset_issuer para no perder pagos hechos con el issuer anterior.
-  const newPayments = (page.records as HorizonPayment[]).filter(
+  const pk = publicKey.trim()
+  const newPayments = (page.records as any[]).filter(
     (r) =>
       r.type === 'payment' &&
-      r.to?.trim() === publicKey.trim() &&
+      (r.to?.trim() === pk || r.into?.trim() === pk) &&
       r.asset_code === usdcCode &&
       !knownHashes.has(r.transaction_hash)
   )
