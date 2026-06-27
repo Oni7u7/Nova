@@ -10,6 +10,7 @@ interface BalanceData {
   ars: string
   brl: string
   cop: string
+  hasTrustline: boolean
 }
 
 interface BalanceCardProps {
@@ -26,6 +27,8 @@ const CURRENCY_CONFIG = {
 export function BalanceCard({ token, localCurrency = 'ars' }: BalanceCardProps) {
   const [balance, setBalance] = useState<BalanceData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [activating, setActivating] = useState(false)
+  const [activateError, setActivateError] = useState('')
 
   async function fetchBalance() {
     try {
@@ -37,6 +40,27 @@ export function BalanceCard({ token, localCurrency = 'ars' }: BalanceCardProps) 
       setBalance(data)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function activateTrustline() {
+    setActivating(true)
+    setActivateError('')
+    try {
+      const res = await fetch('/api/wallet/setup-trustline', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setActivateError(data.error ?? 'Error al activar')
+        return
+      }
+      await fetchBalance()
+    } catch {
+      setActivateError('Error de conexión')
+    } finally {
+      setActivating(false)
     }
   }
 
@@ -53,16 +77,35 @@ export function BalanceCard({ token, localCurrency = 'ars' }: BalanceCardProps) 
   const localAmount = balance ? parseFloat(balance[localCurrency]) : 0
 
   return (
-    <Card gradient className="space-y-1">
-      <p className="text-sm text-slate-400 font-medium">Tu saldo en dólares</p>
-      <p className="font-mono text-4xl font-bold text-white">
-        ${formatUSDC(balance?.usdc ?? '0')}
-        <span className="text-lg text-slate-400 ml-1">USD</span>
-      </p>
-      <p className="text-sm text-emerald-400">
-        ≈ {formatCurrency(localAmount, currConfig.code, currConfig.locale)}{' '}
-        <span className="text-slate-500">{currConfig.label}</span>
-      </p>
-    </Card>
+    <div className="space-y-3">
+      {balance && !balance.hasTrustline && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-yellow-300 text-xs">
+            Tu cuenta no puede recibir USDC todavía.
+            {activateError && (
+              <span className="block text-red-400 mt-0.5">{activateError}</span>
+            )}
+          </p>
+          <button
+            onClick={activateTrustline}
+            disabled={activating}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-200 text-xs font-semibold transition-colors disabled:opacity-50"
+          >
+            {activating ? 'Activando...' : 'Activar ahora'}
+          </button>
+        </div>
+      )}
+      <Card gradient className="space-y-1">
+        <p className="text-sm text-slate-400 font-medium">Tu saldo en dólares</p>
+        <p className="font-mono text-4xl font-bold text-white">
+          ${formatUSDC(balance?.usdc ?? '0')}
+          <span className="text-lg text-slate-400 ml-1">USD</span>
+        </p>
+        <p className="text-sm text-emerald-400">
+          ≈ {formatCurrency(localAmount, currConfig.code, currConfig.locale)}{' '}
+          <span className="text-slate-500">{currConfig.label}</span>
+        </p>
+      </Card>
+    </div>
   )
 }

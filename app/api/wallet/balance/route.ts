@@ -44,6 +44,7 @@ export const GET = withAuth(async (_req: NextRequest, user: JWTPayload) => {
         (b as { asset_code: string; asset_issuer: string }).asset_issuer === USDC.getIssuer()
     )
 
+    const hasTrustline = !!usdcBalance
     const usdc = parseFloat(usdcBalance?.balance ?? '0')
 
     return NextResponse.json({
@@ -51,6 +52,7 @@ export const GET = withAuth(async (_req: NextRequest, user: JWTPayload) => {
       ars: (usdc * rates.ars).toFixed(0),
       brl: (usdc * rates.brl).toFixed(2),
       cop: (usdc * rates.cop).toFixed(0),
+      hasTrustline,
       rates,
     })
   } catch (err) {

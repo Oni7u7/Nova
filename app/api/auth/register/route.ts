@@ -3,10 +3,11 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { Keypair } from '@stellar/stellar-sdk'
+import { Keypair, TransactionBuilder, Operation, Asset, Networks, BASE_FEE } from '@stellar/stellar-sdk'
 import { supabaseAdmin } from '@/lib/supabase/client'
 import { encryptSecret } from '@/lib/crypto/encryption'
 import { fundTestnetAccount } from '@/lib/stellar/friendbot'
+import { server } from '@/lib/stellar/client'
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,16 +81,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Error al crear la cuenta' }, { status: 500 })
     }
 
-    // Fondear en testnet (no bloqueante para el response)
+    // Fondear en testnet y agregar trustline USDC (no bloqueante para el response)
     if (process.env.STELLAR_NETWORK === 'testnet') {
       fundTestnetAccount(keypair.publicKey())
-        .then(() =>
-          supabaseAdmin
-            .from('stellar_accounts')
-            .update({ funded: true })
-            .eq('user_id', user.id)
-        )
-        .catch((err) => console.error('Friendbot error:', err))
+        .then(async () => {
+          await supabaseAdmin.from('stellar_accounts').update({ funded: true }).eq('user_id', user.id)
+          // Esperar que Friendbot propague la cuenta en Horizon (~2s)
+          await new Promise((res) => setTimeout(res, 2000))
+          const usdc = new Asset(process.env.USDC_ASSET_CODE!, process.env.USDC_ISSUER!)
+          const account = await server.loadAccount(keypair.publicKey())
+          const tx = new TransactionBuilder(account, {
+            fee: BASE_FEE,
+            networkPassphrase: Networks.TESTNET,
+          })
+            .addOperation(Operation.changeTrust({ asset: usdc }))
+            .setTimeout(30)
+            .build()
+          tx.sign(keypair)
+          await server.submitTransaction(tx)
+          console.log('[register] USDC trustline configurado para', keypair.publicKey())
+        })
+        .catch((err) => console.error('Friendbot/trustline error:', err))
     }
 
     // Emitir JWT
