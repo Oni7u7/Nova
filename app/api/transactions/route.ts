@@ -43,17 +43,31 @@ async function syncHorizonPayments(userId: string, publicKey: string): Promise<v
 
   for (const payment of usdcPayments) {
     try {
-      // Verificar en DB si ya existe este tx — fuente única de verdad
-      const { data: existing } = await supabaseAdmin
-        .from('transactions')
-        .select('id')
-        .eq('stellar_tx_hash', payment.transaction_hash)
-        .maybeSingle()
-
-      if (existing) continue
-
       const tx = await payment.transaction()
-      const memo = tx.memo ?? null
+      // memo viene como string en memo_type 'text'; null en otros tipos
+      const memo: string | null = (tx as any).memo_type === 'text'
+        ? ((tx as any).memo ?? null)
+        : null
+
+      console.log('[sync] procesando memo:', memo, 'hash:', payment.transaction_hash?.slice(0, 8))
+
+      // Dedup: buscar por memo (más confiable) si existe, sino por hash
+      if (memo) {
+        const { data: existingByMemo } = await supabaseAdmin
+          .from('transactions')
+          .select('id')
+          .eq('memo', memo)
+          .eq('type', 'payment_received')
+          .maybeSingle()
+        if (existingByMemo) continue
+      } else {
+        const { data: existingByHash } = await supabaseAdmin
+          .from('transactions')
+          .select('id')
+          .eq('stellar_tx_hash', payment.transaction_hash)
+          .maybeSingle()
+        if (existingByHash) continue
+      }
 
       const { data: newTx } = await supabaseAdmin
         .from('transactions')
