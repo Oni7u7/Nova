@@ -34,3 +34,23 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+crea el .env.local y coloca lo siguiente:# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://oittuodrnoapoesvfxsh.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9pdHR1b2Rybm9hcG9lc3ZmeHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDAxMjcsImV4cCI6MjA5ODA3NjEyN30.jx1hMFGYqST8PqgopTuXcnytvCdIi644lUbGLVSFbQs
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9pdHR1b2Rybm9hcG9lc3ZmeHNoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjUwMDEyNywiZXhwIjoyMDk4MDc2MTI3fQ.jUNVNpHatbVfgyXcQ5oIH4K6kizvm1_M2UnLIsTAEeQ
+
+# Auth
+JWT_SECRET=a9f35ae54844cc5e35b6c3ffeb70197a0da4939d4a483549010cd62abfd64e3dae2749a08fd2fb4a3a48ce59fd160312e3376edbcbcbdc0cd7d2fa33dc0e579d
+
+# Encriptación wallets Stellar
+ENCRYPTION_MASTER_KEY=adbe760ec80cb74692ce8a1126ef809841236d5a553825190e17a699f5bcfd5b
+
+# Stellar
+STELLAR_NETWORK=testnet
+USDC_ASSET_CODE=USDC
+USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+ANCHOR_HOME_DOMAIN=testanchor.stellar.org
+
+# App URL
+NEXT_PUBLIC_APP_URL=https://nova-xi-one.vercel.app
